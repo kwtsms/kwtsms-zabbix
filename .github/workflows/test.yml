@@ -1,0 +1,23 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install dukpy pyyaml
+      - name: Script tests in Duktape
+        run: python3 -m unittest discover -s tests -v
+      - name: media_kwtsms.yaml matches src/kwtsms.js
+        run: python3 build.py --check

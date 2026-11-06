@@ -1,0 +1,189 @@
+// kwtSMS webhook media type for Zabbix. Built into media_kwtsms.yaml by build.py; edit this file, not the YAML.
+// Plain ES5 so the Zabbix JavaScript engine (Duktape) runs it on Zabbix 7.0 and later.
+
+var KwtSms = {
+    version: '1.0.0',
+    url: 'https://www.kwtsms.com/API/send/',
+    maxNumbers: 200,
+
+    // Arabic-Indic (U+0660-0669) and Extended Arabic-Indic / Persian (U+06F0-06F9) digits to Latin.
+    latinDigits: function (text) {
+        var out = '', i, c;
+        for (i = 0; i < text.length; i++) {
+            c = text.charCodeAt(i);
+            if (c >= 0x0660 && c <= 0x0669) {
+                out += String.fromCharCode(c - 0x0660 + 48);
+            }
+            else if (c >= 0x06F0 && c <= 0x06F9) {
+                out += String.fromCharCode(c - 0x06F0 + 48);
+            }
+            else {
+                out += text.charAt(i);
+            }
+        }
+        return out;
+    },
+
+    // "+965 9xxx xxxx, 00965..." -> unique digit strings of 7 to 15 digits; the rest reported as invalid.
+    // Separated by comma, semicolon or new line only: spaces inside one number are common.
+    parseNumbers: function (sendTo) {
+        var parts = KwtSms.latinDigits(String(sendTo)).split(/[,;\r\n]+/),
+            valid = [], invalid = [], seen = {}, i, n;
+
+        for (i = 0; i < parts.length; i++) {
+            parts[i] = parts[i].replace(/^\s+|\s+$/g, '');
+            if (parts[i] === '') {
+                continue;
+            }
+            n = parts[i].replace(/\D/g, '').replace(/^0+/, '');
+            if (n.length < 7 || n.length > 15) {
+                invalid.push(parts[i]);
+            }
+            else if (!seen[n]) {
+                seen[n] = true;
+                valid.push(n);
+            }
+        }
+        return {valid: valid, invalid: invalid};
+    },
+
+    isEmoji: function (cp) {
+        return (cp >= 0x1F000 && cp <= 0x1FAFF) || (cp >= 0x2600 && cp <= 0x27BF) ||
+            (cp >= 0xFE00 && cp <= 0xFE0F) || cp === 0x20E3 || (cp >= 0xE0000 && cp <= 0xE007F);
+    },
+
+    isHidden: function (cp) {
+        return (cp <= 0x1F && cp !== 0x0A && cp !== 0x09) || (cp >= 0x7F && cp <= 0x9F) ||
+            (cp >= 0x200B && cp <= 0x200F) || (cp >= 0x202A && cp <= 0x202E) || (cp >= 0x2060 && cp <= 0x2069) ||
+            cp === 0x00AD || cp === 0xFEFF || cp === 0xFFFC;
+    },
+
+    // Same cleaning as the kwtSMS client libraries: HTML, emoji and hidden characters removed, Arabic digits to Latin.
+    cleanMessage: function (text) {
+        var s = KwtSms.latinDigits(String(text).replace(/<[^>]*>/g, '')),
+            out = '', i, c, d, cp;
+
+        for (i = 0; i < s.length; i++) {
+            c = s.charCodeAt(i);
+            cp = c;
+            if (c >= 0xD800 && c <= 0xDBFF && i + 1 < s.length) {
+                d = s.charCodeAt(i + 1);
+                if (d >= 0xDC00 && d <= 0xDFFF) {
+                    cp = (c - 0xD800) * 0x400 + (d - 0xDC00) + 0x10000;
+                    i++;
+                    if (!KwtSms.isEmoji(cp)) {
+                        out += String.fromCharCode(c, d);
+                    }
+                    continue;
+                }
+            }
+            if (!KwtSms.isEmoji(cp) && !KwtSms.isHidden(cp)) {
+                out += s.charAt(i);
+            }
+        }
+        return out.replace(/[ \t]+\n/g, '\n').replace(/^\s+|\s+$/g, '');
+    },
+
+    // Long alerts are cut to 7 SMS pages instead of failing: 7 x 153 characters in English, 7 x 67 in Arabic.
+    truncate: function (text) {
+        var limit = /[^\x00-\x7F]/.test(text) ? 469 : 1071;
+        return text.length > limit ? text.substring(0, limit - 3) + '...' : text;
+    },
+
+    hints: {
+        ERR001: 'The API is disabled on this kwtSMS account. Enable it in your kwtSMS account settings.',
+        ERR003: 'Wrong API username or password. Use the API username and password of your kwtSMS account, not your mobile number.',
+        ERR008: 'This Sender ID is banned. Use another Sender ID or contact kwtSMS support.',
+        ERR010: 'Your kwtSMS balance is zero. Recharge your account to keep receiving alerts.',
+        ERR013: 'The kwtSMS sending queue is full. Zabbix will try again.',
+        ERR024: 'The IP address of this Zabbix server is not in your kwtSMS API IP whitelist. Add it in your kwtSMS account settings.',
+        ERR026: 'Sending to this country is not active on your account. Contact kwtSMS support to activate it.',
+        ERR028: 'Wait 15 seconds before sending to the same number again.'
+    },
+
+    send: function (params, numbers, message) {
+        var request = new HttpRequest(),
+            body = JSON.stringify({
+                username: params.username,
+                password: params.password,
+                sender: params.sender || 'KWT-SMS',
+                mobile: numbers.join(','),
+                message: message,
+                test: params.test_mode === '1' ? '1' : '0'
+            }),
+            response, data, code;
+
+        request.addHeader('Content-Type: application/json');
+        request.addHeader('Accept: application/json');
+        request.addHeader('User-Agent: kwtsms-zabbix/' + KwtSms.version);
+        if (params.HTTPProxy) {
+            request.setProxy(params.HTTPProxy);
+        }
+
+        Zabbix.log(4, '[ kwtSMS Webhook ] Sending to ' + numbers.length + ' number(s), test=' +
+            (params.test_mode === '1' ? '1' : '0'));
+        response = request.post(KwtSms.url, body);
+        Zabbix.log(4, '[ kwtSMS Webhook ] HTTP ' + request.getStatus() + ': ' + response);
+
+        try {
+            data = JSON.parse(response);
+        }
+        catch (error) {
+            throw 'kwtSMS returned HTTP ' + request.getStatus() + ' with no JSON answer. Check the Zabbix server can reach www.kwtsms.com (proxy, firewall).';
+        }
+
+        if (data.result !== 'OK') {
+            code = data.code || 'ERROR';
+            throw 'kwtSMS ' + code + ': ' + String(data.description || 'send failed').replace(/[.\s]+$/, '') + '. ' +
+                (KwtSms.hints[code] || '');
+        }
+        return data;
+    }
+};
+
+try {
+    var params = JSON.parse(value),
+        numbers, message, data, result;
+
+    ['username', 'password', 'send_to', 'message'].forEach(function (field) {
+        if (typeof params[field] !== 'string' || params[field].trim() === '' ||
+            ((field === 'username' || field === 'password') && params[field].indexOf('<PLACE') === 0)) {
+            throw 'Required parameter is not set: "' + field + '".';
+        }
+    });
+    if (params.send_to === '{ALERT.SENDTO}') {
+        throw 'Give the user a phone number: Users > Media > kwtSMS > Send to.';
+    }
+
+    numbers = KwtSms.parseNumbers(params.send_to);
+    if (numbers.valid.length === 0) {
+        throw 'No valid phone number in "' + params.send_to + '". Use the full international number, for example 965 followed by the 8 digit number.';
+    }
+    if (numbers.valid.length > KwtSms.maxNumbers) {
+        throw 'Too many numbers in one media (' + numbers.valid.length + '). The limit is ' + KwtSms.maxNumbers + '.';
+    }
+    if (numbers.invalid.length > 0) {
+        Zabbix.log(3, '[ kwtSMS Webhook ] Skipped invalid number(s): ' + numbers.invalid.join(', '));
+    }
+
+    message = KwtSms.truncate(KwtSms.cleanMessage(params.message));
+    if (message === '') {
+        throw 'The alert message is empty after cleaning. Check the message template of this media type.';
+    }
+
+    data = KwtSms.send(params, numbers.valid, message);
+
+    result = 'OK';
+    if (params.test_mode === '1') {
+        result += ' (test mode: queued, not delivered)';
+    }
+    if (numbers.invalid.length > 0) {
+        result += ' (skipped invalid: ' + numbers.invalid.join(', ') + ')';
+    }
+    Zabbix.log(4, '[ kwtSMS Webhook ] ' + result + ', msg-id ' + data['msg-id'] + ', balance ' + data['balance-after']);
+    return result;
+}
+catch (error) {
+    Zabbix.log(3, '[ kwtSMS Webhook ] Failed: ' + error);
+    throw 'Sending failed: ' + error;
+}
