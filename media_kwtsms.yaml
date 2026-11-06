@@ -122,7 +122,7 @@ zabbix_export:
                 ERR013: 'The kwtSMS sending queue is full. Zabbix will try again.',
                 ERR024: 'The IP address of this Zabbix server is not in your kwtSMS API IP whitelist. Add it in your kwtSMS account settings.',
                 ERR026: 'Sending to this country is not active on your account. Contact kwtSMS support to activate it.',
-                ERR028: 'Wait 15 seconds before sending to the same number again.'
+                ERR028: 'Your account blocks repeat messages to the same number within a short time. Zabbix will try again.'
             },
 
             send: function (params, numbers, message) {
