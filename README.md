@@ -16,7 +16,7 @@ One file to import: no package to install on the Zabbix server.
 
 ## Requirements
 
-- Zabbix 7.0 LTS or later.
+- Zabbix 7.0 LTS or later (tested on 7.0.32 and 7.4.16).
 - The Zabbix server can reach `https://www.kwtsms.com` (directly or through a proxy).
 - A kwtSMS account with API access. [Sign up free](https://www.kwtsms.com/signup/).
 
