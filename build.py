@@ -37,7 +37,7 @@ DESCRIPTION = (
     "Send Zabbix alerts by SMS through kwtSMS (kwtsms.com).\n"
     "\n"
     "1. Set username and password to the API username and password of your kwtSMS account.\n"
-    "2. Optional: sender (default KWT-SMS), test_mode (1 = queued, not delivered; no credits used).\n"
+    "2. Optional: sender (default KWT-SMS), test_mode (1 = queued, not delivered; credits held until deleted from the Sending Queue).\n"
     "3. Enable this media type, then give each user a kwtSMS media with the phone number in international format.\n"
     "\n"
     "https://github.com/kwtsms/kwtsms-zabbix"

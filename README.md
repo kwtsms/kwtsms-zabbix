@@ -44,7 +44,7 @@ One file to import: no package to install on the Zabbix server.
 | `username` | placeholder | kwtSMS API username |
 | `password` | placeholder | kwtSMS API password |
 | `sender` | `KWT-SMS` | Sender ID shown on the phone |
-| `test_mode` | `0` | `1` = queued on kwtSMS, not delivered, no credits used |
+| `test_mode` | `0` | `1` = queued on kwtSMS, not delivered; credits held until you delete the message from the Sending Queue |
 | `send_to` | `{ALERT.SENDTO}` | Filled by Zabbix from the user media |
 | `message` | `{ALERT.MESSAGE}` | Filled by Zabbix from the message template |
 | `HTTPProxy` | empty | For example `http://proxy.example.com:3128` |

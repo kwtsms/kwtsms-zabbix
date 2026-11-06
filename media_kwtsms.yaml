@@ -216,7 +216,7 @@ zabbix_export:
         Send Zabbix alerts by SMS through kwtSMS (kwtsms.com).
 
         1. Set username and password to the API username and password of your kwtSMS account.
-        2. Optional: sender (default KWT-SMS), test_mode (1 = queued, not delivered; no credits used).
+        2. Optional: sender (default KWT-SMS), test_mode (1 = queued, not delivered; credits held until deleted from the Sending Queue).
         3. Enable this media type, then give each user a kwtSMS media with the phone number in international format.
 
         https://github.com/kwtsms/kwtsms-zabbix
