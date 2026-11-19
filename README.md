@@ -3,6 +3,8 @@
 Send Zabbix alerts by SMS through [kwtSMS](https://www.kwtsms.com), the SMS gateway for Kuwait and the Gulf.
 One file to import: no package to install on the Zabbix server.
 
+All kwtSMS integrations: [kwtsms.com/integrations](https://www.kwtsms.com/integrations/)
+
 ## Features
 
 - Problem, recovery and update alerts by SMS, plus service, discovery, autoregistration and internal events.
